@@ -1,0 +1,534 @@
+SQL> set echo on;
+SQL> set pagesize 100;
+SQL> set linesize 80;
+SQL> column id heading 'ID' format 9999
+SQL> column full_name heading 'Full Name' format a25 word_wrapped
+SQL> column full_address heading 'Full Address' format a24 word_wrapped
+SQL> column productname heading 'Product Name' format a28 word_wrapped
+SQL> column description heading 'Description' format a22 word_wrapped
+SQL> column cost heading 'Cost' format $990.00
+SQL> column priority heading 'Selling Priority' format a24 word_wrapped
+SQL> -- Mihaela McReynolds
+SQL> -- CITC 2340 Lab 5
+SQL> 
+SQL> --1.    Display the full name (ex. Tom R. Brown) of each aviation customer who has chartered a plane from us.
+SQL> SELECT TRIM(REGEXP_REPLACE((cus_fname || ' ' || cus_initial || '. ' || cus_lname ), '\s.\s', ' ')) AS full_name
+  2      FROM avia_customer
+  3      WHERE avia_customer.cus_code IN 
+  4          (SELECT charter.cus_code FROM charter 
+  5          INTERSECT 
+  6          SELECT avia_customer.cus_code FROM avia_customer)
+  7      ORDER BY cus_fname, cus_initial, cus_lname;
+
+Full Name                
+-------------------------
+Alfred A. Ramas
+George Williams
+James G. Brown
+Kathy W. Smith
+Leona K. Dunne
+Myron Orlando
+Olette K. Smith
+
+7 rows selected. 
+
+SQL> 
+SQL> --2.    Display the full name and customer balance of all aviation customers who have chartered planes 
+SQL> --to Atlanta (ATL).
+SQL> SELECT TRIM(REGEXP_REPLACE((cus_fname || ' ' || cus_initial || '. ' || cus_lname ), '\s.\s', ' ')) AS full_name, 
+  2         cus_balance AS "Customer Balance"
+  3      FROM avia_customer
+  4      WHERE avia_customer.cus_code IN
+  5          (SELECT charter.cus_code FROM charter WHERE char_destination = 'ATL')
+  6      ORDER BY cus_fname, cus_initial, cus_lname;
+
+Full Name                 Customer Balance
+------------------------- ----------------
+George Williams                          0
+James G. Brown                           0
+Leona K. Dunne                           0
+
+SQL> 
+SQL> --3.    Display the full names (ex. Mr. Tom R Davis) and hire dates (ex. March 21, 2000) of all aviation employees 
+SQL> --who have earned ratings that have also been earned by employee 106.
+SQL> SELECT TRIM(REGEXP_REPLACE((emp_title || emp_fname || ' ' || emp_initial || '. ' || emp_lname ), '\s.\s', ' ')) AS full_name,
+  2          TO_CHAR(TO_DATE(emp_hire_date, 'DD-MON-RR'), 'fmMonth DD, YYYY') as "Date Hired"
+  3      FROM avia_employee
+  4      WHERE emp_num IN 
+  5          (SELECT emp_num FROM earnedrating WHERE rtg_code IN 
+  6              (SELECT rtg_code FROM earnedrating WHERE emp_num = 106))
+  7      AND emp_num <> 106
+  8      ORDER BY emp_fname, emp_initial, emp_lname;
+
+Full Name                 Date Hired        
+------------------------- ------------------
+Ms. Elizabeth K. Travis   April 14, 1991    
+Mr. John P. Lange         October 20, 1996  
+Ms. Rhonda G. Lewis       April 25, 1988    
+Mr. Robert D. Williams    January 8, 2006   
+
+SQL> 
+SQL> --4.  Display the full name and date of birth (using 4-digit years) of each aviation employee 
+SQL> --who is younger than John Lange.
+SQL> SELECT TRIM(REGEXP_REPLACE((emp_fname || ' ' || emp_initial || '. ' || emp_lname ), '\s.\s', ' ')) AS full_name,
+  2          TO_CHAR(TO_DATE(emp_dob, 'DD-MON-RR'), 'fmMonth DD, YYYY') AS "Date Of Birth"
+  3      FROM avia_employee
+  4      WHERE TRUNC ((SYSDATE - emp_dob)/ 365.25) <
+  5          (SELECT TRUNC ((SYSDATE - emp_dob)/ 365.25) 
+  6              FROM avia_employee 
+  7              WHERE LOWER(emp_fname) = 'john' 
+  8              AND LOWER(emp_lname) = 'lange')
+  9      ORDER BY emp_fname, emp_initial, emp_lname;
+
+Full Name                 Date Of Birth     
+------------------------- ------------------
+Anne M. Jones             October 16, 1974  
+Jorge D. Diante           August 21, 1974   
+Robert D. Williams        March 14, 1975    
+
+SQL> 
+SQL> --5.    Display the full name and phone number of each aviation customer who has chartered 
+SQL> --as many or more planes than aviation customer#10011.
+SQL> 
+SQL> SELECT TRIM(REGEXP_REPLACE((cus_fname || ' ' || cus_initial || '. ' || cus_lname ), '\s.\s', ' ')) AS full_name,
+  2              '(' || cus_areacode || ')' || cus_phone AS "Phone Number"
+  3      FROM avia_customer 
+  4      WHERE cus_code IN 
+  5          (SELECT cus_code FROM charter GROUP BY cus_code HAVING COUNT(char_trip) >=
+  6              (SELECT COUNT (char_trip) FROM charter WHERE cus_code = 10011 GROUP BY cus_code))
+  7      AND cus_code <> 10011
+  8      ORDER BY cus_fname, cus_initial, cus_lname;
+
+Full Name                 Phone Number 
+------------------------- -------------
+George Williams           (615)290-2556
+
+SQL> 
+SQL> 
+SQL> --6.    Display the aircraft number, model code, manufacturer and model name of the aircraft that was most recently chartered.
+SQL> --Hint: June 1, 2018 is more recent than June 1, 2015.  Be sure that your query will still work if multiple aircraft were 
+SQL> --chartered on the same day. You are permitted to use one inner join to get the manufacturer and model name displayed as 
+SQL> --part of the result set. Your query must include at least one nested query to earn full credit.
+SQL> SELECT RPAD(ac_number, 8) AS "Aircraft", aircraft.mod_code AS "Model", mod_manufacturer AS "Manufacturer", mod_name AS "Model Name"
+  2      FROM aircraft, model
+  3      WHERE aircraft.mod_code = model.mod_code AND
+  4      aircraft.ac_number IN 
+  5          (SELECT charter.ac_number FROM charter WHERE char_date = 
+  6              (SELECT MAX(char_date) FROM charter));
+
+Aircraft Model      Manufacturer    Model Name          
+-------- ---------- --------------- --------------------
+1484P    PA23-250   Piper           Aztec               
+4278Y    PA31-350   Piper           Navajo Chieftain    
+
+SQL> 
+SQL> --7.    Display the aircraft number and model code of all aircraft that have a higher AVERAGE 
+SQL> --charter hours flown than aircraft#2778V.    
+SQL> SELECT RPAD(aircraft.ac_number, 8) AS "Aircraft", aircraft.mod_code AS "Model Name"
+  2      FROM aircraft, charter
+  3      WHERE aircraft.ac_number = charter.ac_number
+  4      GROUP BY aircraft.ac_number, mod_code
+  5      HAVING  AVG(char_hours_flown)  > 
+  6          (SELECT AVG(char_hours_flown) FROM charter WHERE ac_number = '2778V')
+  7      ORDER BY aircraft.ac_number, mod_code;
+
+Aircraft Model Name
+-------- ----------
+2289L    C-90A     
+4278Y    PA31-350  
+
+SQL> 
+SQL> --8.    Display the full name and phone number of each aviation customer who has not chartered 
+SQL> --a plane.
+SQL> SELECT TRIM(REGEXP_REPLACE((cus_fname || ' ' || cus_initial || '. ' || cus_lname ), '\s.\s', ' ')) AS full_name, 
+  2          '(' || cus_areacode || ')' || cus_phone AS "Phone Number"
+  3      FROM avia_customer
+  4      WHERE cus_code IN 
+  5          (SELECT cus_code FROM avia_customer MINUS SELECT cus_code FROM charter)
+  6      ORDER BY cus_fname, cus_initial, cus_lname;
+
+Full Name                 Phone Number 
+------------------------- -------------
+Amy B. O'Brian            (713)442-3381
+Anne G. Farriss           (713)382-7185
+Paul F. Olowski           (615)894-2180
+
+SQL> 
+SQL> --For queries#9, 10 and 11, use the SALESREP and SALESREP_LEADERS tables owned by user JJ. 
+SQL> --Your queries must be constructed using the relational operators union, intersect, or minus. 
+SQL> --Sales reps in the SALESREP_LEADER table have won a special award for selling a certain amount 
+SQL> --and brand of particular targeted products. Some of the people in the leader table no longer 
+SQL> --work for the company. All sales reps in the SALESREP table are current employees.
+SQL> 
+SQL> --9.	Display sales rep id, full name and highest degree earned of all sales reps that have 
+SQL> --won leader awards and are current employees.
+SQL> SELECT salesrepid AS id, firstname || ' ' || lastname AS full_name, highestdegree AS "Highest Degree"
+  2      FROM jj.salesrep 
+  3      INTERSECT 
+  4      SELECT salesrepid, firstname || ' ' || lastname, highestdegree 
+  5      FROM jj.salesrep_leader
+  6      ORDER BY id;
+
+   ID Full Name                 Highest Degree                
+----- ------------------------- ------------------------------
+    1 Maurie Lockley            Master's Degree               
+    8 Johnny Smith              PhD                           
+
+SQL> 
+SQL> --10.	Display sales rep id, full name and hire date of all sales reps that are either 
+SQL> --current employees or have won leader awards.
+SQL> SELECT salesrepid AS id, firstname || ' ' || lastname AS full_name, 
+  2          TO_CHAR(TO_DATE(hiredate, 'DD MON, RR'), 'fmMonth DD, YYYY') AS "Hire Date"
+  3      FROM jj.salesrep 
+  4      UNION 
+  5      SELECT salesrepid, firstname || ' ' || lastname, TO_CHAR(TO_DATE(hiredate, 'DD MON, RR'), 'fmMonth DD, YYYY')
+  6      FROM jj.salesrep_leader
+  7      ORDER BY id;
+
+   ID Full Name                 Hire Date         
+----- ------------------------- ------------------
+    1 Maurie Lockley            January 1, 2010   
+    2 SpongeBob SquarePants     January 1, 2008   
+    3 Miguel Cabrera            February 1, 2011  
+    4 Rachel Codd               May 13, 1984      
+    5 Danielle Wallace          August 28, 2014   
+    7 James Hydusik             March 2, 1956     
+    8 Johnny Smith              October 29, 2011  
+    9 Michael Cavitt            September 2, 2014 
+    9 Michelle Brown            September 2, 2014 
+   10 Andrew Bolce              January 11, 2012  
+   11 John Moore                September 1, 2014 
+   18 Ronnie Goodrich           September 10, 2014
+   30 Rich Bgame                December 30, 1990 
+   40 Williford Horton          February 1, 2000  
+
+14 rows selected. 
+
+SQL> 
+SQL> --11.	We want to invite all sales leaders to a special ceremony in their honor. 
+SQL> --We have already sent email to existing employees using company email. However we wish 
+SQL> --to invite former leaders who are no longer employees. Write a query that will provide 
+SQL> --the appropriate contact information and insert a comment into your script explaining 
+SQL> --how the executive assistant can use the information to do the invitation. 
+SQL> SELECT firstname || ' ' || lastname AS full_name, 
+  2          address || ', ' || city || ', ' || state || ' ' || zipcode AS full_address,
+  3          '(' || SUBSTR(homephone, 1, 3) || ')' || SUBSTR(homephone, 4,3) || '-' || SUBSTR(homephone, 7,4) AS "Home Phone", 
+  4          '(' || SUBSTR(cellphone, 1, 3) || ')' || SUBSTR(cellphone, 4,3) || '-' || SUBSTR(cellphone, 7,4) AS "Cellphone"
+  5      FROM jj.salesrep_leader
+  6      MINUS
+  7      SELECT firstname || ' ' || lastname, address || ', ' || city || ', ' || state || ' ' || zipcode, homephone, cellphone
+  8      FROM jj.salesrep
+  9      ORDER BY full_name;
+
+Full Name                 Full Address             Home Phone    Cellphone    
+------------------------- ------------------------ ------------- -------------
+Johnny Smith              100 Apple Lane, Johnson, (832)438-3833 (584)837-4733
+                          TN 37601                                            
+
+Maurie Lockley            1007 West Main St, Grove (814)555-1222 (814)555-5556
+                          City, PA 16127                                      
+
+Michelle Brown            1240 Foothills Rd,       (865)816-3794 (865)388-9900
+                          Lenoir City, TN 37771                               
+
+Rich Bgame                100 Main St., Norris, TN (999)555-1212 ()-          
+                          37751                                               
+
+Williford Horton          225 Orange St.,          (555)999-1111 ()-          
+                          Knoxville, TN 37932                                 
+
+
+SQL> -- Please use home phone and/ or cellphone to request an email address or verify the mailing address
+SQL> -- in order to send these former employees their invites.
+SQL> 
+SQL> --12.	Use the DECODE( ) statement to display the product name, description,  cost and 
+SQL> --selling priority from user JJ’s PRODUCT table, where the selling priority is derived 
+SQL> --from the BRAND value as follows: Discount => Low priority – don’t encourage, 
+SQL> --House => Only sell if customer requests it, Premium => High Priority – Push!,  
+SQL> --all others => Brand Unknown.
+SQL> SELECT productname, description, cost, 
+  2          DECODE(brand,
+  3              'Discount', 'Low priority - don' || chr(39) || 't encourage',
+  4              'House', 'Only sell if customer requests it',
+  5              'Premium', 'High Priority - Push!',
+  6              'Brand Unknown') 
+  7          AS priority
+  8          FROM jj.product
+  9          ORDER BY productname;
+
+Product Name                 Description                Cost Selling Priority   
+---------------------------- ---------------------- -------- -------------------
+Ceramic Mug                  SD Company Logo           $5.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Coffee - Assorted Flavors    18/Case. Pre-Ground      $23.00 Only sell if       
+                             1.75 Oz Bags                    customer requests  
+                                                             it                 
+
+Coffee - Colombian Supreme   24/Case, Pre-Ground      $16.00 Low priority -     
+                             1.75 Oz Bags                    don't encourage    
+
+Coffee - Decaf               24/Case, Pre-Ground      $20.00 Low priority -     
+                             1.75 Oz Bags                    don't encourage    
+
+Coffee - Hazelnut            24/Case, Pre-Ground      $23.00 High Priority -    
+                             1.75 Oz Bags                    Push!              
+
+Coffee - Mild Blend          24/Case, Pre-Ground      $20.00 Only sell if       
+                             1.75 Oz Bags                    customer requests  
+                                                             it                 
+
+Coffee Filters               500/Case, Fits 10-12      $3.00 Only sell if       
+                             Cup Coffee Maker                customer requests  
+                                                             it                 
+
+Creamers - Assorted Flavors  400/Case, 8 50-count     $20.00 Low priority -     
+                             Boxes                           don't encourage    
+
+Creamers - Liquid            200/Case, Individual     $15.00 High Priority -    
+                             Creamers                        Push!              
+
+Milk - 1 pint                Delivered Daily           $1.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Milk - 1 quart               Delivered Daily           $2.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Napkins                      3000/Case, White         $20.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Popcorn - Buttered           36/Case, 3.75 Oz          $9.50 Only sell if       
+                             Microwave Bags                  customer requests  
+                                                             it                 
+
+Popcorn - Plain              36/Case, 3.75 Oz          $8.50 Only sell if       
+                             Microwave Bags                  customer requests  
+                                                             it                 
+
+Soup - Chicken               50 Envelopes             $10.00 High Priority -    
+                                                             Push!              
+
+Soup - Variety Pak           50 Envelopes             $12.00 High Priority -    
+                                                             Push!              
+
+Spoons                       500/Box, White Plastic   $15.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Stirrers - Plastic           1000/Box                  $1.50 Low priority -     
+                                                             don't encourage    
+
+Stirrers - Wood              1000/Box                  $1.25 Low priority -     
+                                                             don't encourage    
+
+Styrofoam Cups - 10 ounce    1000/Case                $17.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Styrofoam Cups - 12 ounce    1000/Case                $19.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Sugar Packets                2000/Case                $18.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Sugar Substitute             500/Case, 1-Serving      $19.00 Low priority -     
+                             Bags                            don't encourage    
+
+Tea Bags - Decaf             75/Box, Individual Tea    $7.00 Only sell if       
+                             Bags                            customer requests  
+                                                             it                 
+
+Tea Bags - Regular           75/Box, Individual Tea    $5.00 Only sell if       
+                             Bags                            customer requests  
+                                                             it                 
+
+
+25 rows selected. 
+
+SQL> 
+SQL> --13.	Use a CASE statement that produces the same result as #12. 
+SQL> SELECT productname, description, cost, 
+  2          CASE brand
+  3              WHEN 'Discount' THEN 'Low priority - don' || chr(39) || 't encourage'
+  4              WHEN 'House' THEN 'Only sell if customer requests it'
+  5              WHEN 'Premium' THEN 'High Priority - Push!'
+  6              ELSE 'Brand Unknown'
+  7              END
+  8          AS priority
+  9          FROM jj.product
+ 10          ORDER BY productname;
+
+Product Name                 Description                Cost Selling Priority   
+---------------------------- ---------------------- -------- -------------------
+Ceramic Mug                  SD Company Logo           $5.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Coffee - Assorted Flavors    18/Case. Pre-Ground      $23.00 Only sell if       
+                             1.75 Oz Bags                    customer requests  
+                                                             it                 
+
+Coffee - Colombian Supreme   24/Case, Pre-Ground      $16.00 Low priority -     
+                             1.75 Oz Bags                    don't encourage    
+
+Coffee - Decaf               24/Case, Pre-Ground      $20.00 Low priority -     
+                             1.75 Oz Bags                    don't encourage    
+
+Coffee - Hazelnut            24/Case, Pre-Ground      $23.00 High Priority -    
+                             1.75 Oz Bags                    Push!              
+
+Coffee - Mild Blend          24/Case, Pre-Ground      $20.00 Only sell if       
+                             1.75 Oz Bags                    customer requests  
+                                                             it                 
+
+Coffee Filters               500/Case, Fits 10-12      $3.00 Only sell if       
+                             Cup Coffee Maker                customer requests  
+                                                             it                 
+
+Creamers - Assorted Flavors  400/Case, 8 50-count     $20.00 Low priority -     
+                             Boxes                           don't encourage    
+
+Creamers - Liquid            200/Case, Individual     $15.00 High Priority -    
+                             Creamers                        Push!              
+
+Milk - 1 pint                Delivered Daily           $1.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Milk - 1 quart               Delivered Daily           $2.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Napkins                      3000/Case, White         $20.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Popcorn - Buttered           36/Case, 3.75 Oz          $9.50 Only sell if       
+                             Microwave Bags                  customer requests  
+                                                             it                 
+
+Popcorn - Plain              36/Case, 3.75 Oz          $8.50 Only sell if       
+                             Microwave Bags                  customer requests  
+                                                             it                 
+
+Soup - Chicken               50 Envelopes             $10.00 High Priority -    
+                                                             Push!              
+
+Soup - Variety Pak           50 Envelopes             $12.00 High Priority -    
+                                                             Push!              
+
+Spoons                       500/Box, White Plastic   $15.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Stirrers - Plastic           1000/Box                  $1.50 Low priority -     
+                                                             don't encourage    
+
+Stirrers - Wood              1000/Box                  $1.25 Low priority -     
+                                                             don't encourage    
+
+Styrofoam Cups - 10 ounce    1000/Case                $17.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Styrofoam Cups - 12 ounce    1000/Case                $19.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Sugar Packets                2000/Case                $18.00 Only sell if       
+                                                             customer requests  
+                                                             it                 
+
+Sugar Substitute             500/Case, 1-Serving      $19.00 Low priority -     
+                             Bags                            don't encourage    
+
+Tea Bags - Decaf             75/Box, Individual Tea    $7.00 Only sell if       
+                             Bags                            customer requests  
+                                                             it                 
+
+Tea Bags - Regular           75/Box, Individual Tea    $5.00 Only sell if       
+                             Bags                            customer requests  
+                                                             it                 
+
+
+25 rows selected. 
+
+SQL> 
+SQL> --14.	Use a DECODE or CASE statement to display words for JJ’s PRODUCT COST column as follows:
+SQL> --$5.00 or below =>   “Low Price”
+SQL> --Greater than $5.00 and less than $20.00 “Moderate Price”
+SQL> --$20.00 and above “High Price”
+SQL> --    Be sure to include enough of the other columns from the table to make the output meaningful.
+SQL> SELECT productname, description, 
+  2      CASE 
+  3          WHEN cost <= 5 THEN 'Low Price'
+  4          WHEN cost > 5 AND cost < 20 THEN 'Moderate Price'
+  5          WHEN cost >= 20 THEN 'High Price'
+  6          ELSE 'Cost Unknown'
+  7          END
+  8      AS "Cost"
+  9      FROM jj.product
+ 10      ORDER BY productname;
+
+Product Name                 Description            Cost          
+---------------------------- ---------------------- --------------
+Ceramic Mug                  SD Company Logo        Low Price     
+Coffee - Assorted Flavors    18/Case. Pre-Ground    High Price    
+                             1.75 Oz Bags                         
+
+Coffee - Colombian Supreme   24/Case, Pre-Ground    Moderate Price
+                             1.75 Oz Bags                         
+
+Coffee - Decaf               24/Case, Pre-Ground    High Price    
+                             1.75 Oz Bags                         
+
+Coffee - Hazelnut            24/Case, Pre-Ground    High Price    
+                             1.75 Oz Bags                         
+
+Coffee - Mild Blend          24/Case, Pre-Ground    High Price    
+                             1.75 Oz Bags                         
+
+Coffee Filters               500/Case, Fits 10-12   Low Price     
+                             Cup Coffee Maker                     
+
+Creamers - Assorted Flavors  400/Case, 8 50-count   High Price    
+                             Boxes                                
+
+Creamers - Liquid            200/Case, Individual   Moderate Price
+                             Creamers                             
+
+Milk - 1 pint                Delivered Daily        Low Price     
+Milk - 1 quart               Delivered Daily        Low Price     
+Napkins                      3000/Case, White       High Price    
+Popcorn - Buttered           36/Case, 3.75 Oz       Moderate Price
+                             Microwave Bags                       
+
+Popcorn - Plain              36/Case, 3.75 Oz       Moderate Price
+                             Microwave Bags                       
+
+Soup - Chicken               50 Envelopes           Moderate Price
+Soup - Variety Pak           50 Envelopes           Moderate Price
+Spoons                       500/Box, White Plastic Moderate Price
+Stirrers - Plastic           1000/Box               Low Price     
+Stirrers - Wood              1000/Box               Low Price     
+Styrofoam Cups - 10 ounce    1000/Case              Moderate Price
+Styrofoam Cups - 12 ounce    1000/Case              Moderate Price
+Sugar Packets                2000/Case              Moderate Price
+Sugar Substitute             500/Case, 1-Serving    Moderate Price
+                             Bags                                 
+
+Tea Bags - Decaf             75/Box, Individual Tea Moderate Price
+                             Bags                                 
+
+Tea Bags - Regular           75/Box, Individual Tea Low Price     
+                             Bags                                 
+
+
+25 rows selected. 
+
